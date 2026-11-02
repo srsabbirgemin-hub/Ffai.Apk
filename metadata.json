@@ -1,0 +1,6 @@
+{
+  "name": "Floating AI",
+  "description": "Floating AI overlay assistant with glowing draggable orb, voice calls, Groq streaming chat, and live tools.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
