@@ -1,0 +1,99 @@
+name: Build Android APK
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build & Package APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Prepare Secrets & Keystore
+        run: |
+          # Ensure .env exists for the secrets gradle plugin
+          touch .env
+          if [ -f .env.example ]; then
+            cp -n .env.example .env || true
+          fi
+
+          # Ensure debug.keystore is present
+          if [ ! -f debug.keystore ]; then
+            if [ -f debug.keystore.base64 ]; then
+              echo "Decoding debug.keystore from base64..."
+              base64 -d debug.keystore.base64 > debug.keystore
+            else
+              echo "Generating standard debug.keystore..."
+              keytool -genkey -v -keystore debug.keystore \
+                -alias androiddebugkey -storepass android -keypass android \
+                -keyalg RSA -keysize 2048 -validity 10000 \
+                -dname "CN=Android Debug,O=Android,C=US"
+            fi
+          fi
+
+      - name: Grant Execute Permission to Gradlew
+        run: chmod +x gradlew
+
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug --stacktrace --no-daemon
+
+      - name: Rename APK for Easy Identification
+        run: |
+          mkdir -p output-apk
+          cp app/build/outputs/apk/debug/app-debug.apk output-apk/Ffai-FloatingAI-v1.0.apk
+          ls -lh output-apk/
+
+      - name: Upload Debug APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ffai-FloatingAI-APK
+          path: output-apk/Ffai-FloatingAI-v1.0.apk
+          retention-days: 30
+
+      - name: Create GitHub Release on Tag or Dispatch
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name || 'v1.0.0' }}
+          name: "Release ${{ github.ref_name || 'v1.0.0' }} - Ffai Floating AI APK"
+          body: |
+            ## 📱 Ffai Floating AI Android App
+            
+            - **Package**: `com.aistudio.floatingai.rxbqkz`
+            - **Version**: `1.0`
+            - **Features**:
+              - Floating Draggable & Resizable Overlay Panel
+              - AI Chat with Gemini API & Quick Prompts
+              - Collapsible / Bubble minimize mode
+              - Beautiful Material 3 UI with neon violet accent
+            
+            ### 📥 Download
+            Download the attached `Ffai-FloatingAI-v1.0.apk` below and install it directly on your Android phone.
+          files: output-apk/Ffai-FloatingAI-v1.0.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
